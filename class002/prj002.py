@@ -5,20 +5,15 @@ from tkinter import *
 
 
 #######################定義函數########################
-def hi():
-    print("Hello, world!")
-
-
 def show():
-    display.config(
-        text="Hello, world!", fg="blue", bg="red"
-    )  # 設定標籤的文字為"Hello, world!"
-
-
-def clear():
-    display.config(
-        text="", fg=window.cget("bg"), bg=window.cget("bg")
-    )  # 設定標籤的文字為空字串，清除標籤的內容
+    if display.cget("bg") == "red":
+        display.config(
+            text="Hello, world!", fg="red", bg="blue"
+        )  # 偵測到背景是紅色，則切換為藍色背景和紅色文字
+    elif display.cget("bg") == "blue":
+        display.config(
+            text="Hello, world!", fg="blue", bg="red"
+        )  # 偵測到背景是藍色，則切換為紅色背景和藍色文字
 
 
 #######################建立視窗########################
@@ -28,12 +23,13 @@ window.geometry("400x300")  # 設定視窗大小，格式為"寬x高"
 #######################建立按鈕########################
 button1 = Button(window, text="show", command=show)  # 建立按鈕物件，並設定按鈕文字
 # 指令(def)在這裡裡面不能加()因為我們只是要傳遞函數的參考，而不是呼叫函數
-button2 = Button(window, text="clear", command=clear)
 #######################建立標籤########################
-display = Label(window, text="")  # 建立標籤物件，並設定標籤文字
+display = Label(
+    window, text="Hello, world!", fg="blue", bg="red"
+)  # 建立標籤物件，並設定標籤文字
+
 #######################運行應用程式########################
 button1.pack()  # 將按鈕放入視窗中，並自動調整位置和大小
-button2.pack()  # 將按鈕放入視窗中，並自動調整位置和大小
 display.pack()  # 將標籤放入視窗中，並自動調整位置和大小
 window.mainloop()
 """
