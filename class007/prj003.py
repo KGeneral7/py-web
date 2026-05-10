@@ -4,6 +4,7 @@ import sys
 import os
 from ttkbootstrap import *  # pip install ttkbootstrap -U(在終端機
 from PIL import Image, ImageTk  # pip install Pillow(在終端機)
+from tkinter import messagebox  # 匯入messagebox模組，用於顯示消息框
 
 #######################定義常數########################
 API_KEY = "5bcad7fe1640dbdb54f65ae164eda027"  # KEY
@@ -44,6 +45,13 @@ def on_switch_change():
 
 
 def wather_info():
+    if (
+        not entry.get().strip()
+    ):  # 檢查Entry物件中的文本是否為空，如果為空，則顯示一個錯誤消息框，提示用戶輸入城市名稱
+        messagebox.showerror(
+            "錯誤", "請輸入城市名稱！"
+        )  # 顯示一個錯誤消息框，標題為"錯誤"，內容為"請輸入城市名稱！"
+        return  # 結束函數的執行，返回到調用函數的位置
     city_name = (
         entry.get()
     )  # 從Entry物件中獲取用戶輸入的城市名稱，這裡假設Entry物件的名字是city_name
@@ -108,6 +116,10 @@ def wather_info():
             print(
                 f"無法下載圖標，HTTP狀態碼: {icon_response.status_code}"
             )  # 如果圖標下載失敗，打印錯誤信息和HTTP狀態碼
+            # 另一種處理方式：
+            # weather_photo.raise_for_status()
+            # from io import BytesIO
+            # image = Image.open(BytesIO(icon_response.content))
     else:
         print(
             f"城市 {city_name} 不存在，請檢查輸入是否正確。"
