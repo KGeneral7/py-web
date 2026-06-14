@@ -108,10 +108,17 @@ class AIAssistant:
             self.api_key
         )  # 把API_KEY設定給openai模組，這樣我們就可以使用openai模組提供的功能了
 
-    def ask(self, system_prompt, user_message, temperature=0.2, model="gpt-4o"):
-        """進行一次AI對話，適合單次任務(天氣分析等)"""
+    def ask(
+        self,
+        system_prompt,
+        user_message,
+        history_message=None,
+        temperature=0.2,
+        model="gpt-4o",
+    ):
+        """進行一次AI對話，也可以帶入整理好的話紀錄"""
         # 這個方法讓我們可以問AI一個問題，並得到一次性回應
-        # system_prompt是我們給AI的指令，告訴AI我們希望它怎麼回答，user_message是我們問AI的問題，temperature是控制AI回答的隨機程度，model是我們使用的AI模型
+        # system_prompt是我們給AI的指令，告訴AI我們希望它怎麼回答，user_message是我們問AI的問題，temperature是控制AI回答的隨機程度，model是我們使用的AI模型，history_message是我們之前的對話紀錄，這樣我們就可以讓AI在回答問題的時候參考之前的對話紀錄了，這樣就可以讓AI的回答更有連貫性了
 
         # 如果沒有設定金鑰，直接回傳錯誤訊息
         if not self.api_key:
@@ -120,13 +127,26 @@ class AIAssistant:
                 "Error: OpenAI API key is not set.請先在.env檔案裡面設定OPENAI_API_KEY，然後重新啟動程式。",
             )
 
+        if history_message is None:
+            history_message = (
+                []
+            )  # 如果沒有提供對話紀錄，就使用一個空的列表，這樣就不會有對話紀錄了，這樣就可以讓這個方法更靈活了，因為有些時候我們可能不需要對話紀錄，只想要問AI一個問題，那麼我們就可以直接呼叫這個方法，而不需要提供對話紀錄了
+
         # messages的順序很重要:
         # 1. system_prompt: 這是給AI的指令，告訴AI我們希望它怎麼回答，這個訊息會影響AI的回答風格和內容，所以我們要把它放在第一個位置，讓AI先知道我們的要求。
-        # 2. user_message: 這是我們問AI的問題，這個訊息會讓AI知道我們想要什麼樣的回答，所以我們要把它放在第二個位置，讓AI在知道我們的要求之後，再來處理我們的問題。
-        messages = [{"role": "system", "content": system_prompt}] + [
-            {"role": "user", "content": user_message}
-        ]
+        # 2. history_message: 這是之前的對話紀錄，這個訊息會讓AI知道之前的對話內容，這樣AI在回答問題的時候就可以參考之前的對話紀錄了，這樣就可以讓AI的回答更有連貫性了，所以我們要把它放在第二個位置，讓AI在知道我們的要求之後，再來處理之前的對話紀錄。
+        # 3. user_message: 這是我們問AI的問題，這個訊息會讓AI知道我們現在想要問什麼問題，所以我們要把它放在最後一個位置，讓AI在知道我們的要求和之前的對話紀錄之後，再來處理我們現在的問題。
 
+        messages = (
+            [{"role": "system", "content": system_prompt}]
+            + history_message
+            + [{"role": "user", "content": user_message}]
+        )
+
+        print("####Messages sent to OpenAI API:####")
+        for msg in messages:
+            print(f"{msg['role']}: {msg['content']}")
+        print("####End of messages####")
         try:
             # 向 OPENAI API 發送請求
             response = openai.chat.completions.create(
