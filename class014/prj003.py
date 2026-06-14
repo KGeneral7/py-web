@@ -37,6 +37,29 @@ weather_api = WearherAPI(os.getenv("WEATHER_API_KEY"))
 ai_assistant = AIAssistant(os.getenv("OPENAI_API_KEY"))
 # 從環境變數中讀取 OPENAI_API_KEY，這個 api_key 是用來驗證我們的身份的，當我們呼叫 OpenAI 的 API 時，會使用這個 api_key 來驗證我們的身份，確保我們有權限使用這些 API
 
+# 限制可讀取歷史紀錄上數量為20筆，這樣就不會因為歷史紀錄太多而導致效能問題了
+CHANNEL_HISTORY_LIMIT = 20
+
+# system_prompt是給AI的指令，告訴AI我們希望它怎麼回答，這個訊息會影響AI的回答風格和內容，所以我們要把它放在第一個位置，讓AI先知道我們的要求。 # system_prompt 像是給 AI 的角色卡，會影響 AI 回覆的語氣和工作方式。
+CHAT_SYSTEM_PROMPT = """
+你是一個在 Discord 群組頻道中協助大家的 AI 助手。
+請根據頻道歷史判斷大家正在討論什麼，再回答最新提到你的問題。
+回覆請使用繁體中文，語氣自然且像'gay'、簡短、適合國小學生閱讀。
+如果頻道歷史不足以判斷答案，請說明你還需要哪一個資訊。
+如果需要提到特定使用者或其他 bot，請複製歷史訊息裡的 mention：<@使用者ID>。
+使用 mention 時，請直接放在一般文字中，不要寫成 @名字，也不要加反斜線、反引號或程式碼區塊。
+不要使用 @everyone、@here 或角色標記，也不要自己編造 mention ID。
+"""
+
+# 允許AI回覆中提到"使用者"或"其他bot"，但不允許AI回覆中提到"everyone"、"here"或角色標記，這樣就可以避免AI回覆中出現不適當的提及了
+# bot 在 Discord 裡也屬於 user ，所以 user=True就可以提到其他bot
+AI_REPLY_ALLOWED_MENTIONS = discord.AllowedMentions(
+    users=True,
+    roles=False,
+    everyone=False,
+    replied_user=True,
+)
+
 
 def build_weather_embed(weather_summary):
     """把整理好的天氣資訊摘要，排成Discord embed的格式，這樣就可以在 Discord 上美觀地顯示天氣資訊了"""
@@ -83,6 +106,50 @@ def build_forecast_embeds(forecast_summary):
         embeds.append(embed)
 
     return embeds
+
+
+async def get_channel_history(channel, bot_user, limit=15, before=None):
+    """取得頻道歷史訊息，這樣就可以讓 AI 助手參考這些歷史訊息來回答問題了(整理成messgaes)"""
+    old_messages = []
+    history_messages = []
+    # Discord API 讀取頻道訊息時，預先拿較新的訊息
+    # 這裡先明確抓"最近幾則"的訊息，把"抓資料"和"排成對話順序"分成兩步
+    # oldest_first=False代表先拿取最接近before參數的訊息，也就是較新的訊息，這樣就可以確保我們拿到的訊息是最近的了
+    # 下面再反轉成"舊到新"交給AI，這樣就可以確保AI參考的歷史訊息是按照時間順序排列的了
+    async for old_message in channel.history(
+        limit=limit,
+        before=before,
+        oldest_first=False,
+    ):
+        old_messages.append(old_message)
+
+    # Discord 抓回來看的是"新到舊"，所以要反轉成"舊到新"的順序，這樣才是對話的正確順序
+    for old_message in reversed(
+        old_messages
+    ):  # reversed是python內建的函式，可以把一個可迭代的物件反轉，這裡我們把抓回來的訊息列表反轉成從舊到新的順序，這樣就可以確保我們參考的歷史訊息是按照時間順序排列的了
+        # 這裡使用message.content，而不是message.clean_content，是因為clean_content會把訊息裡的mention轉換成純文字，這樣AI就無法知道訊息裡提到了誰了，所以我們需要使用原始的content，這樣AI才能正確地參考歷史訊息來回答問題了
+        # message.content 會保留<@使用者ID>這種真正的mention格式，這樣AI就可以知道訊息裡提到了誰了，這樣AI在回答問題的時候就可以參考這些歷史訊息來回答問題了
+        content = (
+            old_message.content.strip()
+        )  # 去除訊息內容前後的空白，這樣就可以避免因為訊息內容有多餘的空白而導致 AI 參考歷史訊息時出現問題了，這裡我們使用了 strip() 方法，這個方法會返回一個新的字串，這個字串是原來的字串去除了前後空白後的結果
+        if (
+            not content
+        ):  # 如果訊息內容是空的，就跳過這個訊息，這樣就可以避免因為訊息內容是空的而導致 AI 參考歷史訊息時出現問題了
+            continue
+
+        if old_message.author.id == bot_user.id:
+            # 機器人自己以前說過的話，用 assistant 的角色來標記，這樣AI就可以知道這是機器人自己以前說過的話了，這樣AI在回答問題的時候就可以參考這些歷史訊息來回答問題了
+            history_messages.append({"role": "assistant", "content": content})
+        else:
+            # 其他同學和其他bot都標籤上名字，AI才知道是誰說的。
+            speaker_type = "機器人" if old_message.author.bot else "同學"
+            speaker_mention = (
+                old_message.author.mention
+            )  # 這裡我們使用了 message.author.mention，這個屬性會返回一個字符串，這個字符串是用來提及這個使用者的格式，例如 <@使用者ID>，這樣AI就可以知道訊息裡提到了誰了，這樣AI在回答問題的時候就可以參考這些歷史訊息來回答問題了
+            user_content = (
+                f"{old_message.author.display_name}"
+                f"({speaker_type} ，mention:{speaker_mention})說: {content}"
+            )
 
 
 #######################事件#######################
