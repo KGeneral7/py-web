@@ -113,8 +113,8 @@ class AIAssistant:
         system_prompt,
         user_message,
         history_message=None,
-        temperature=0.2,
-        model="gpt-4o",
+        temperature=1,
+        model="gpt-5.5",
     ):
         """進行一次AI對話，也可以帶入整理好的話紀錄"""
         # 這個方法讓我們可以問AI一個問題，並得到一次性回應
@@ -137,26 +137,25 @@ class AIAssistant:
         # 2. history_message: 這是之前的對話紀錄，這個訊息會讓AI知道之前的對話內容，這樣AI在回答問題的時候就可以參考之前的對話紀錄了，這樣就可以讓AI的回答更有連貫性了，所以我們要把它放在第二個位置，讓AI在知道我們的要求之後，再來處理之前的對話紀錄。
         # 3. user_message: 這是我們問AI的問題，這個訊息會讓AI知道我們現在想要問什麼問題，所以我們要把它放在最後一個位置，讓AI在知道我們的要求和之前的對話紀錄之後，再來處理我們現在的問題。
 
-        messages = (
-            [{"role": "system", "content": system_prompt}]
-            + history_message
-            + [{"role": "user", "content": user_message}]
-        )
+        input_messages = history_message + [{"role": "user", "content": user_message}]
 
         print("####Messages sent to OpenAI API:####")
-        for msg in messages:
+        print(f"system:{system_prompt}")
+        for msg in input_messages:
             print(f"{msg['role']}: {msg['content']}")
         print("####End of messages####")
         try:
             # 向 OPENAI API 發送請求
-            response = openai.chat.completions.create(
+            response = openai.responses.create(
                 model=model,
-                messages=messages,
-                temperature=temperature,
+                instructions=system_prompt,
+                input=input_messages,
+                tools=[{"type": "web_search"}],
+                tool_choice="auto",
             )
 
             # 從 API 回應中取出 AI 的回答
-            assistant_message = response.choices[0].message.content
+            assistant_message = response.output_text
 
             return assistant_message, None  # 回傳 AI 的回答和 None 表示沒有錯誤
 
